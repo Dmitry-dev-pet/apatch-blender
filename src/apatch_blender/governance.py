@@ -63,6 +63,16 @@ def _write_paths(contract: Contract, root: Path) -> list[str]:
     if isinstance(preview_path, str) and preview_path:
         values.append(preview_path)
 
+    verification_report = contract.raw.get("verification_report")
+    if isinstance(verification_report, str) and verification_report:
+        values.append(verification_report)
+
+    video = contract.raw.get("video")
+    if isinstance(video, dict):
+        video_path = video.get("path")
+        if isinstance(video_path, str) and video_path:
+            values.append(video_path)
+
     for operation in contract.operations:
         if operation.get("op") != "render_preview":
             continue
