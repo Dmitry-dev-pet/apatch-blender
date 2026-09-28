@@ -12,6 +12,7 @@ SUPPORTED_OPERATIONS = {
     "set_world",
     "scale_camera_framing",
     "animate_camera_path",
+    "set_camera_dof",
     "add_area_light",
     "set_material",
     "set_transform",
