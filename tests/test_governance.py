@@ -20,6 +20,8 @@ def payload():
         "base_scene": "input/base.blend",
         "output_scene": "output/edited.blend",
         "execution_record": "evidence/execution.json",
+        "verification_report": "evidence/verification.json",
+        "video": {"path": "output/final.mp4"},
         "allowed_operations": ["set_world", "render_preview"],
         "operations": [
             {
@@ -57,6 +59,8 @@ def test_required_scope_binds_plan_operations_and_writes(tmp_path):
     assert scope["allowed_writes"] == [
         "output/edited.blend",
         "evidence/execution.json",
+        "evidence/verification.json",
+        "output/final.mp4",
         "evidence/preview.png",
     ]
     assert scope["tools"] == [
