@@ -36,6 +36,20 @@ def _vector_close(actual, expected, tol: float = 1e-4) -> bool:
     )
 
 
+def _camera_dof_payload(camera_name: str | None):
+    scene = bpy.context.scene
+    camera = bpy.data.objects.get(camera_name) if camera_name else scene.camera
+    if camera is None or camera.type != "CAMERA":
+        return None
+    dof = camera.data.dof
+    return {
+        "name": camera.name,
+        "use_dof": bool(dof.use_dof),
+        "aperture_fstop": float(dof.aperture_fstop),
+        "focus_distance": float(dof.focus_distance),
+    }
+
+
 def _check(checks: dict, name: str, ok: bool, actual, expected):
     checks[name] = {
         "pass": bool(ok),
@@ -137,6 +151,8 @@ def verify_contract(contract: Contract, root: Path) -> dict[str, Any]:
     camera_spec = expected.get("camera", {})
     camera_name = camera_spec.get("name")
     base_camera = camera_payload(camera_name)
+    camera_dof_spec = expected.get("camera_dof", {})
+    camera_dof_name = camera_dof_spec.get("name") or camera_name
 
     light_specs = expected.get("lights", [])
 
@@ -145,6 +161,7 @@ def verify_contract(contract: Contract, root: Path) -> dict[str, Any]:
     edited_world = world_payload()
     edited_render = render_payload()
     edited_camera = camera_payload(camera_name)
+    edited_camera_dof = _camera_dof_payload(camera_dof_name)
 
     if contract.governance.get("mode") == "apatch_sdd":
         scene = bpy.context.scene
@@ -311,6 +328,60 @@ def verify_contract(contract: Contract, root: Path) -> dict[str, Any]:
             checkpoints,
         )
 
+    if camera_dof_spec:
+        tolerance = float(camera_dof_spec.get("tolerance", 1e-3))
+        failures = []
+        if edited_camera_dof is None:
+            failures.append({"error": "camera missing"})
+        else:
+            if "use_dof" in camera_dof_spec and (
+                edited_camera_dof["use_dof"] is not bool(camera_dof_spec["use_dof"])
+            ):
+                failures.append(
+                    {
+                        "field": "use_dof",
+                        "actual": edited_camera_dof["use_dof"],
+                        "expected": bool(camera_dof_spec["use_dof"]),
+                    }
+                )
+            if "aperture_fstop" in camera_dof_spec and not _close(
+                edited_camera_dof["aperture_fstop"],
+                float(camera_dof_spec["aperture_fstop"]),
+                tolerance,
+            ):
+                failures.append(
+                    {
+                        "field": "aperture_fstop",
+                        "actual": edited_camera_dof["aperture_fstop"],
+                        "expected": float(camera_dof_spec["aperture_fstop"]),
+                    }
+                )
+
+            original_frame = bpy.context.scene.frame_current
+            path_camera = bpy.data.objects.get(edited_camera_dof["name"])
+            for checkpoint in camera_dof_spec.get("focus_checkpoints", []):
+                frame = int(checkpoint["frame"])
+                bpy.context.scene.frame_set(frame)
+                actual_distance = float(path_camera.data.dof.focus_distance)
+                expected_distance = float(checkpoint["focus_distance"])
+                if not _close(actual_distance, expected_distance, tolerance):
+                    failures.append(
+                        {
+                            "frame": frame,
+                            "actual_focus_distance": actual_distance,
+                            "expected_focus_distance": expected_distance,
+                        }
+                    )
+            bpy.context.scene.frame_set(original_frame)
+
+        _check(
+            checks,
+            "expected_camera_dof",
+            not failures,
+            failures,
+            camera_dof_spec,
+        )
+
     for light_spec in light_specs:
         name = light_spec["name"]
         actual = light_payload(name)
@@ -332,13 +403,22 @@ def verify_contract(contract: Contract, root: Path) -> dict[str, Any]:
         render_ok = all(edited_render.get(key) == value for key, value in wanted.items())
         _check(checks, "expected_render", render_ok, edited_render, wanted)
 
+    preview_values = []
     preview_path = contract.raw.get("preview_path")
-    if preview_path:
-        preview = contract.resolve(root, preview_path)
+    if isinstance(preview_path, str) and preview_path:
+        preview_values.append(preview_path)
+    preview_paths = contract.raw.get("preview_paths", [])
+    if isinstance(preview_paths, list):
+        preview_values.extend(
+            value for value in preview_paths if isinstance(value, str) and value
+        )
+
+    for index, preview_value in enumerate(dict.fromkeys(preview_values)):
+        preview = contract.resolve(root, preview_value)
         preview_ok = preview.exists() and preview.stat().st_size > 10_000
         _check(
             checks,
-            "preview_exists",
+            f"preview_exists:{index}",
             preview_ok,
             {
                 "path": str(preview),
