@@ -57,6 +57,10 @@ class Contract:
     def expected(self) -> dict[str, Any]:
         return self.raw.get("expected", {})
 
+    @property
+    def governance(self) -> dict[str, Any]:
+        return self.raw.get("governance", {"mode": "standalone"})
+
     def resolve(self, root: Path, relative_path: str) -> Path:
         root = root.resolve()
         path = (root / relative_path).resolve()
@@ -142,6 +146,20 @@ def _validate_contract(raw: dict[str, Any]) -> None:
 
     expected = raw.get("expected", {})
     _require_mapping(expected, "expected")
+
+    governance = raw.get("governance")
+    if governance is not None:
+        governance = _require_mapping(governance, "governance")
+        mode = _require_string(governance.get("mode"), "governance.mode")
+        if mode not in {"standalone", "apatch_sdd"}:
+            raise ContractError(
+                "governance.mode must be 'standalone' or 'apatch_sdd'"
+            )
+        if mode == "apatch_sdd":
+            _require_string(
+                governance.get("requirement"),
+                "governance.requirement",
+            )
 
 
 def load_contract(path: str | Path) -> Contract:
