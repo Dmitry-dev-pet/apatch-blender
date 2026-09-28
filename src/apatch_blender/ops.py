@@ -269,6 +269,67 @@ def animate_camera_path(params: dict[str, Any], root: Path) -> dict[str, Any]:
         ),
     }
 
+def set_camera_dof(params: dict[str, Any], root: Path) -> dict[str, Any]:
+    scene = bpy.context.scene
+    camera_name = str(
+        params.get("camera", scene.camera.name if scene.camera else "Camera")
+    )
+    camera = _object(camera_name)
+    if camera.type != "CAMERA":
+        raise OperationError(f"Object is not a camera: {camera_name}")
+
+    dof = camera.data.dof
+    before = {
+        "use_dof": bool(dof.use_dof),
+        "aperture_fstop": float(dof.aperture_fstop),
+        "focus_distance": float(dof.focus_distance),
+    }
+
+    if "use_dof" in params:
+        dof.use_dof = bool(params["use_dof"])
+    if "aperture_fstop" in params:
+        fstop = float(params["aperture_fstop"])
+        if fstop <= 0:
+            raise OperationError("set_camera_dof.aperture_fstop must be > 0")
+        dof.aperture_fstop = fstop
+    if "focus_distance" in params:
+        focus_distance = float(params["focus_distance"])
+        if focus_distance <= 0:
+            raise OperationError("set_camera_dof.focus_distance must be > 0")
+        dof.focus_distance = focus_distance
+
+    focus_keyframes = params.get("focus_keyframes", [])
+    if not isinstance(focus_keyframes, list):
+        raise OperationError("set_camera_dof.focus_keyframes must be a list")
+
+    applied = []
+    for index, item in enumerate(focus_keyframes):
+        if not isinstance(item, dict):
+            raise OperationError(
+                f"set_camera_dof.focus_keyframes[{index}] must be an object"
+            )
+        frame = int(item["frame"])
+        focus_distance = float(item["focus_distance"])
+        if focus_distance <= 0:
+            raise OperationError(
+                f"set_camera_dof.focus_keyframes[{index}].focus_distance must be > 0"
+            )
+        dof.focus_distance = focus_distance
+        camera.data.keyframe_insert(data_path="dof.focus_distance", frame=frame)
+        applied.append({"frame": frame, "focus_distance": focus_distance})
+
+    return {
+        "camera": camera.name,
+        "before": before,
+        "after": {
+            "use_dof": bool(dof.use_dof),
+            "aperture_fstop": float(dof.aperture_fstop),
+            "focus_distance": float(dof.focus_distance),
+        },
+        "focus_keyframes": applied,
+    }
+
+
 def set_render(params: dict[str, Any], root: Path) -> dict[str, Any]:
     scene = bpy.context.scene
     before = {
@@ -327,6 +388,7 @@ OPERATIONS: dict[str, Callable[[dict[str, Any], Path], dict[str, Any]]] = {
     "set_world": set_world,
     "scale_camera_framing": scale_camera_framing,
     "animate_camera_path": animate_camera_path,
+    "set_camera_dof": set_camera_dof,
     "add_area_light": add_area_light,
     "set_material": set_material,
     "set_transform": set_transform,
