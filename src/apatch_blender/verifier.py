@@ -22,6 +22,10 @@ def _close(a: float, b: float, tol: float = 1e-4) -> bool:
     return abs(float(a) - float(b)) <= tol
 
 
+def _quat_close(actual, expected, tol: float = 1e-4) -> bool:
+    return 1.0 - abs(float(actual.normalized().dot(expected.normalized()))) <= tol
+
+
 def _vector_close(actual, expected, tol: float = 1e-4) -> bool:
     return (
         actual is not None
@@ -216,6 +220,65 @@ def verify_contract(contract: Contract, root: Path) -> dict[str, Any]:
             camera_ok,
             {"base": base_camera, "edited": edited_camera},
             camera_spec,
+        )
+
+
+    camera_path_spec = expected.get("camera_path")
+    if camera_path_spec:
+        from mathutils import Vector
+
+        path_camera = bpy.data.objects.get(camera_path_spec.get("name", "Camera"))
+        checkpoints = camera_path_spec.get("checkpoints", [])
+        tolerance = float(camera_path_spec.get("tolerance", 1e-3))
+        failures = []
+        original_frame = bpy.context.scene.frame_current
+
+        if path_camera is None:
+            failures.append({"error": "camera missing"})
+        else:
+            for checkpoint in checkpoints:
+                frame = int(checkpoint["frame"])
+                bpy.context.scene.frame_set(frame)
+
+                expected_location = Vector(checkpoint["location"])
+                expected_target = Vector(checkpoint["target"])
+                actual_location = path_camera.location.copy()
+                expected_quat = (
+                    expected_target - expected_location
+                ).to_track_quat("-Z", "Y")
+                actual_quat = path_camera.rotation_euler.to_quaternion()
+
+                ok = (
+                    (actual_location - expected_location).length <= tolerance
+                    and _quat_close(actual_quat, expected_quat, tolerance)
+                )
+                if "lens" in checkpoint:
+                    ok = ok and _close(
+                        path_camera.data.lens,
+                        float(checkpoint["lens"]),
+                        tolerance,
+                    )
+
+                if not ok:
+                    failures.append(
+                        {
+                            "frame": frame,
+                            "actual_location": list(actual_location),
+                            "expected_location": list(expected_location),
+                            "actual_rotation": list(path_camera.rotation_euler),
+                            "expected_rotation": list(expected_quat.to_euler()),
+                            "actual_lens": float(path_camera.data.lens),
+                            "expected_lens": checkpoint.get("lens"),
+                        }
+                    )
+
+        bpy.context.scene.frame_set(original_frame)
+        _check(
+            checks,
+            "expected_camera_path",
+            not failures and bool(checkpoints),
+            failures,
+            checkpoints,
         )
 
     for light_spec in light_specs:

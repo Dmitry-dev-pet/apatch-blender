@@ -11,6 +11,7 @@ SCHEMA_VERSION = 1
 SUPPORTED_OPERATIONS = {
     "set_world",
     "scale_camera_framing",
+    "animate_camera_path",
     "add_area_light",
     "set_material",
     "set_transform",

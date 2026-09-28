@@ -195,6 +195,80 @@ def set_transform(params: dict[str, Any], root: Path) -> dict[str, Any]:
     }
 
 
+
+def animate_camera_path(params: dict[str, Any], root: Path) -> dict[str, Any]:
+    scene = bpy.context.scene
+    camera_name = str(
+        params.get("camera", scene.camera.name if scene.camera else "Camera")
+    )
+    camera = _object(camera_name)
+    keyframes = params.get("keyframes")
+    if not isinstance(keyframes, list) or len(keyframes) < 2:
+        raise OperationError(
+            "animate_camera_path.keyframes must contain at least two keyframes"
+        )
+
+    if bool(params.get("clear_existing_animation", True)):
+        camera.animation_data_clear()
+        if camera.data is not None:
+            camera.data.animation_data_clear()
+
+    applied = []
+    for index, item in enumerate(keyframes):
+        if not isinstance(item, dict):
+            raise OperationError(
+                f"animate_camera_path.keyframes[{index}] must be an object"
+            )
+        frame = int(item["frame"])
+        location = Vector(
+            _vector(
+                item["location"],
+                3,
+                f"animate_camera_path.keyframes[{index}].location",
+            )
+        )
+        target = Vector(
+            _vector(
+                item["target"],
+                3,
+                f"animate_camera_path.keyframes[{index}].target",
+            )
+        )
+
+        if (target - location).length < 1e-6:
+            raise OperationError(
+                f"Camera keyframe {index} target must differ from location"
+            )
+
+        camera.location = location
+        camera.rotation_mode = "XYZ"
+        camera.rotation_euler = (target - location).to_track_quat("-Z", "Y").to_euler()
+        camera.keyframe_insert(data_path="location", frame=frame)
+        camera.keyframe_insert(data_path="rotation_euler", frame=frame)
+
+        if "lens" in item:
+            camera.data.lens = float(item["lens"])
+            camera.data.keyframe_insert(data_path="lens", frame=frame)
+
+        applied.append(
+            {
+                "frame": frame,
+                "location": list(camera.location),
+                "target": list(target),
+                "rotation_euler": list(camera.rotation_euler),
+                "lens": float(camera.data.lens),
+            }
+        )
+
+    scene.frame_set(int(keyframes[0]["frame"]))
+    return {
+        "camera": camera.name,
+        "keyframes": applied,
+        "clear_existing_animation": bool(
+            params.get("clear_existing_animation", True)
+        ),
+    }
+
 def set_render(params: dict[str, Any], root: Path) -> dict[str, Any]:
     scene = bpy.context.scene
     before = {
@@ -252,6 +326,7 @@ def render_preview(params: dict[str, Any], root: Path) -> dict[str, Any]:
 OPERATIONS: dict[str, Callable[[dict[str, Any], Path], dict[str, Any]]] = {
     "set_world": set_world,
     "scale_camera_framing": scale_camera_framing,
+    "animate_camera_path": animate_camera_path,
     "add_area_light": add_area_light,
     "set_material": set_material,
     "set_transform": set_transform,

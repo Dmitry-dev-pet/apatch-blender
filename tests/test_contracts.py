@@ -59,3 +59,30 @@ def test_resolve_rejects_workspace_escape(tmp_path):
     contract = load_contract(write_contract(tmp_path, base_payload()))
     with pytest.raises(ContractError, match="escapes workspace root"):
         contract.resolve(tmp_path, "../outside.blend")
+
+
+def test_accepts_animate_camera_path(tmp_path):
+    payload = base_payload()
+    payload["allowed_operations"] = ["animate_camera_path"]
+    payload["operations"] = [
+        {
+            "op": "animate_camera_path",
+            "params": {
+                "camera": "Camera",
+                "keyframes": [
+                    {
+                        "frame": 1,
+                        "location": [0, -10, 5],
+                        "target": [0, 0, 0],
+                    },
+                    {
+                        "frame": 30,
+                        "location": [5, -8, 4],
+                        "target": [0, 0, 0],
+                    },
+                ],
+            },
+        }
+    ]
+    contract = load_contract(write_contract(tmp_path, payload))
+    assert "animate_camera_path" in contract.allowed_operations

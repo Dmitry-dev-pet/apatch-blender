@@ -34,6 +34,7 @@ PASS / FAIL + evidence
 
 - `set_world`
 - `scale_camera_framing`
+- `animate_camera_path`
 - `add_area_light`
 - `set_material`
 - `set_transform`
@@ -115,3 +116,8 @@ The verifier emits separate static and animation SHA-256 hashes, making protecte
 The first consumer is `Dmitry-dev-pet/apatch-blender-demo`, where the existing Rubik `R U R' U'` scene is being migrated from a one-off edit script to this generic bridge.
 
 The next target is a larger scene such as Coimbra, where contracts can protect city geometry while allowing camera, lighting, atmosphere, and render changes.
+
+
+### Camera paths
+
+`animate_camera_path` accepts explicit frame/location/target keyframes. The generic verifier can independently assert those checkpoints through `expected.camera_path`, so cinematic camera motion remains contract data rather than arbitrary Blender Python.
