@@ -96,6 +96,80 @@ blender --background --factory-startup \
 
 The executor opens the base scene itself. The verifier independently re-opens the base and edited scenes and computes protected semantic manifests.
 
+
+## APatch-governed execution
+
+The JSON file can run in legacy standalone mode, but it can also be treated as a
+**derived Blender execution plan** whose authority comes from a live APatch SDD
+session.
+
+Add a governance binding to the plan:
+
+```json
+{
+  "governance": {
+    "mode": "apatch_sdd",
+    "requirement": "SPEC-COIMBRA-1#R1"
+  }
+}
+```
+
+Then ask the bridge what the APatch task envelope must authorize:
+
+```bash
+python scripts/describe_apatch_scope.py \
+  --contract contracts/coimbra-003-slow.json \
+  --root "$PWD"
+```
+
+The output contains:
+
+- the exact `SPEC#Rk` requirement;
+- `allowed_writes` for the edited `.blend` and evidence artifacts;
+- exact Blender operation tool ids such as `apatch_blender:animate_camera_path`;
+- a `checks` entry containing `apatch-blender-plan:sha256:<hash>`.
+
+Before Blender mutates anything, `apatch-blender` requires an active APatch
+implementation session that:
+
+1. is anchored to the exact `spec:SPEC#Rk@<content-hash>` artifact;
+2. carries an SDD task envelope for the same requirement;
+3. contains the exact Blender plan hash;
+4. admits every requested Blender operation;
+5. admits every output path.
+
+The executor embeds the APatch session id, requirement, envelope hash, and plan
+hash into the edited scene. The independent verifier checks that binding in
+addition to protected semantic state.
+
+This keeps the authority chain:
+
+```text
+APatch SPEC#Rk
+    |
+frozen task envelope + governed session
+    |
+hash-bound Blender execution plan
+    |
+apatch-blender executor
+    |
+edited .blend
+    |
+semantic verifier
+    |
+APatch verification / attestation
+```
+
+Install the optional APatch runtime in the Python environment visible to Blender:
+
+```bash
+python -m pip install -e ".[apatch]"
+```
+
+As with APatch itself, this is mediated enforcement rather than sealed
+containment: a process with unrestricted out-of-band filesystem access can still
+bypass the bridge.
+
 ## Semantic verification
 
 Protected state can include:

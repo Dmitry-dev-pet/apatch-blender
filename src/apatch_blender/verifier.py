@@ -9,6 +9,7 @@ from typing import Any
 import bpy
 
 from .contracts import Contract, load_contract
+from .governance import plan_digest
 from .manifest import (
     camera_payload,
     light_payload,
@@ -144,6 +145,35 @@ def verify_contract(contract: Contract, root: Path) -> dict[str, Any]:
     edited_world = world_payload()
     edited_render = render_payload()
     edited_camera = camera_payload(camera_name)
+
+    if contract.governance.get("mode") == "apatch_sdd":
+        scene = bpy.context.scene
+        actual_governance = {
+            "mode": scene.get("apatch_blender_governance_mode"),
+            "session_id": scene.get("apatch_session_id"),
+            "requirement": scene.get("apatch_requirement"),
+            "plan_sha256": scene.get("apatch_blender_plan_sha256"),
+            "envelope_hash": scene.get("apatch_envelope_hash"),
+        }
+        expected_governance = {
+            "mode": "apatch_sdd",
+            "requirement": contract.governance.get("requirement"),
+            "plan_sha256": plan_digest(contract),
+        }
+        governance_ok = (
+            actual_governance["mode"] == expected_governance["mode"]
+            and actual_governance["requirement"] == expected_governance["requirement"]
+            and actual_governance["plan_sha256"] == expected_governance["plan_sha256"]
+            and bool(actual_governance["session_id"])
+            and bool(actual_governance["envelope_hash"])
+        )
+        _check(
+            checks,
+            "apatch_governance_binding",
+            governance_ok,
+            actual_governance,
+            expected_governance,
+        )
 
     _check(
         checks,
