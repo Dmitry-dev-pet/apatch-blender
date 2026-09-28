@@ -1,0 +1,56 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import bpy
+
+from .contracts import Contract, load_contract
+from .ops import execute_operation
+
+
+def execute_contract(contract: Contract, root: Path) -> dict:
+    root = root.resolve()
+    base_scene = contract.resolve(root, contract.base_scene)
+    output_scene = contract.resolve(root, contract.output_scene)
+
+    if not base_scene.is_file():
+        raise FileNotFoundError(f"Base scene not found: {base_scene}")
+
+    output_scene.parent.mkdir(parents=True, exist_ok=True)
+
+    bpy.ops.wm.open_mainfile(filepath=str(base_scene))
+    scene = bpy.context.scene
+    scene["apatch_blender_contract_id"] = contract.id
+
+    results = []
+    for index, operation in enumerate(contract.operations):
+        op_name = operation["op"]
+        if op_name not in contract.allowed_operations:
+            raise RuntimeError(
+                f"Operation {op_name!r} is not authorized by contract {contract.id}"
+            )
+        result = execute_operation(op_name, operation.get("params", {}), root)
+        results.append({"index": index, "op": op_name, "result": result})
+
+    bpy.ops.wm.save_as_mainfile(filepath=str(output_scene))
+
+    execution = {
+        "contract": contract.id,
+        "base_scene": str(base_scene),
+        "output_scene": str(output_scene),
+        "operations": results,
+    }
+
+    execution_path_value = contract.raw.get("execution_record")
+    if execution_path_value:
+        execution_path = contract.resolve(root, execution_path_value)
+        execution_path.parent.mkdir(parents=True, exist_ok=True)
+        execution_path.write_text(json.dumps(execution, indent=2) + "\n")
+
+    return execution
+
+
+def execute_contract_file(contract_path: str | Path, root: str | Path) -> dict:
+    contract = load_contract(contract_path)
+    return execute_contract(contract, Path(root))
