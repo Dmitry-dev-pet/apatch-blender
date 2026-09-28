@@ -86,3 +86,24 @@ def test_accepts_animate_camera_path(tmp_path):
     ]
     contract = load_contract(write_contract(tmp_path, payload))
     assert "animate_camera_path" in contract.allowed_operations
+
+
+def test_accepts_set_camera_dof(tmp_path):
+    payload = base_payload()
+    payload["allowed_operations"] = ["set_camera_dof"]
+    payload["operations"] = [
+        {
+            "op": "set_camera_dof",
+            "params": {
+                "camera": "Camera",
+                "use_dof": True,
+                "aperture_fstop": 2.2,
+                "focus_keyframes": [
+                    {"frame": 1, "focus_distance": 300.0},
+                    {"frame": 30, "focus_distance": 360.0},
+                ],
+            },
+        }
+    ]
+    contract = load_contract(write_contract(tmp_path, payload))
+    assert "set_camera_dof" in contract.allowed_operations
