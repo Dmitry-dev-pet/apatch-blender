@@ -35,6 +35,7 @@ PASS / FAIL + evidence
 - `set_world`
 - `scale_camera_framing`
 - `animate_camera_path`
+- `set_camera_dof`
 - `add_area_light`
 - `set_material`
 - `set_transform`
@@ -195,3 +196,12 @@ The next target is a larger scene such as Coimbra, where contracts can protect c
 ### Camera paths
 
 `animate_camera_path` accepts explicit frame/location/target keyframes. The generic verifier can independently assert those checkpoints through `expected.camera_path`, so cinematic camera motion remains contract data rather than arbitrary Blender Python.
+
+
+### Camera depth of field
+
+`set_camera_dof` is a bounded visual-development operation for camera depth of
+field. It can enable DOF, set the aperture f-stop, set a fixed focus distance,
+or keyframe focus distance over the existing camera path. Contracts can assert
+the same values through `expected.camera_dof`, so miniature/tilt-shift-like
+looks remain independently verifiable rather than arbitrary Blender Python.
