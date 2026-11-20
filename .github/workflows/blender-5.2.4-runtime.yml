@@ -1,0 +1,46 @@
+name: Download official Blender 5.2.4 LTS (one-off)
+on:
+  push:
+    branches:
+      - tools/blender-5.2.4-runtime-20261120
+    paths:
+      - .github/workflows/blender-5.2.4-runtime.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Fetch official release archive and checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://download.blender.org/release/Blender5.2"
+          curl --fail --location --retry 5 --retry-all-errors --max-time 900 "$BASE/blender-5.2.4-linux-x64.tar.xz" --output blender-5.2.4-linux-x64.tar.xz
+          curl --fail --location --retry 5 "$BASE/blender-5.2.4.sha256" --output blender-5.2.4.sha256
+          python3 - <<'PY'
+          import hashlib, pathlib, re
+          name="blender-5.2.4-linux-x64.tar.xz"
+          lines=pathlib.Path("blender-5.2.4.sha256").read_text().splitlines()
+          candidates=[s for s in lines if name in s]
+          if len(candidates) != 1: raise SystemExit(f"Expected one checksum line, got {len(candidates)}")
+          hashes=re.findall(r"(?<![0-9a-fA-F])[0-9a-fA-F]{64}(?![0-9a-fA-F])",candidates[0])
+          if len(hashes) != 1: raise SystemExit("Missing or ambiguous SHA-256")
+          h=hashlib.sha256()
+          with open(name,"rb") as f:
+              for b in iter(lambda:f.read(8*1024*1024),b""): h.update(b)
+          actual=h.hexdigest()
+          assert actual.lower()==hashes[0].lower(), f"SHA-256 mismatch: {actual}"
+          print(f"verified sha256: {actual}, bytes: {pathlib.Path(name).stat().st_size}")
+          PY
+      - name: Upload verified Blender archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: blender-5.2.4-linux-x64-verified
+          path: |
+            blender-5.2.4-linux-x64.tar.xz
+            blender-5.2.4.sha256
+          compression-level: 0
+          retention-days: 3
